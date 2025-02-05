@@ -3,6 +3,7 @@
 #include <array>
 #include <Windows.h>
 #include <conio.h>
+#define _USE_MATH_DEFINES
 #include <math.h>
 //#include "glad.c"
 #include <KHR/khrplatform.h>
@@ -11,15 +12,16 @@
 #include <gl/GLU.h>
 #include <GLFW/glfw3.h>
 
-using namespace std;
 
+using namespace std;
 
 //environemnt variables, in meters
 array<float, 3> boundaries = { 100, 100, 100 };
 float t = 0.006f;
 float g = 9.81f;
 int loopExit = 0;
-double glTime = glfwGetTime();
+float glTime = float(glfwGetTime());
+float fM_PI = float(M_PI);
 
 //origin point and velocity storage for generic physics object
 class PhysObj {
@@ -34,7 +36,9 @@ public:
 		pos = { 0,0,0 };
 		vel = { 0,0,0 };
 		r = 0;
-		verts = { 0, 0.5, -0.5, -0.5, 0.5, -0.5 };
+		verts = { 0.0f,  0.5f, 1.0f, 0.0f, 0.0f, 
+				 -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+				  0.5f, -0.5f, 0.0f, 0.0f, 1.0f };
 	};
 
 	PhysObj(array<float, 3> posInit, array<float, 3> velInit, float rInit) {
@@ -45,7 +49,9 @@ public:
 
 	void writePos(array<float, 3> posNew) {
 		pos = posNew;
-		verts = { pos[0], pos[2] + 0.5f, pos[0] - 0.5f, pos[2] - 0.5f, pos[0] + 0.5f, pos[2] - 0.5f};
+		verts = { pos[0]       , pos[2] + 0.5f, verts[2] , verts[3] , verts[4],
+				  pos[0] - 0.5f, pos[2] - 0.5f, verts[7] , verts[8] , verts[9],
+				  pos[0] + 0.5f, pos[2] - 0.5f, verts[12], verts[13], verts[14] };
 	};
 
 	void writeVel(array<float, 3> velNew) {
@@ -54,6 +60,10 @@ public:
 
 	void writer(float rNew) {
 		r = rNew;
+	};
+
+	void writeVerts(vector<float> vertsNew) {
+		verts = vertsNew;
 	};
 
 	array<float, 3> getPos() {
@@ -76,7 +86,7 @@ public:
 vector<PhysObj> objects;
 
 //main sim
-void physicsSim() {
+void physicsSim(float timeDiff) {
 	for (int iter = 0; iter < objects.size(); iter++) {
 		array<float, 3> pos = objects[iter].getPos();
 		array<float, 3> vel = objects[iter].getVel();
@@ -91,8 +101,8 @@ void physicsSim() {
 		};
 
 		//update position based on velocity, then update velocity
-		pos = { pos[0] + vel[0], pos[1] + vel[1], pos[2] + vel[2] };
-		vel = { vel[0], vel[1], vel[2] - (g * t) };
+		pos = { pos[0] + vel[0] * timeDiff, pos[1] + vel[1] * timeDiff, pos[2] + vel[2] * timeDiff };
+		vel = { vel[0], vel[1], vel[2] - (g * timeDiff) };
 
 		objects[iter].writePos(pos);
 		objects[iter].writeVel(vel);
@@ -107,11 +117,46 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 	};
 };
 
+
+const GLchar* vertexSource = R"glsl(
+	#version 460 core
+
+	in vec2 position;
+	in vec3 colorVert;
+
+	out vec3 colorFrag;
+
+	void main() {
+		vec2 positionNew;
+		positionNew.x = position.x;
+		positionNew.y = position.y * -1.0;
+		colorFrag = colorVert;
+		gl_Position = vec4(positionNew, 0.0, 1.0);
+	};
+)glsl";
+
+const GLchar* fragmentSource = R"glsl(
+	#version 460 core
+	
+	in vec3 colorFrag;
+
+	out vec4 colorOut;
+
+	void main() {
+		vec3 color;
+		color = colorFrag;
+		color = (1.0, 1.0, 1.0) - colorFrag;
+		colorOut = vec4(color, 1.0);
+	};
+)glsl";
+
+
 void errorCallback(int error, const char* description) {
 	fprintf(stderr, "Error: %s\n", description);
 };
 
 int main() {
+
 	glfwSetErrorCallback(errorCallback);
 	if (!glfwInit()) { return 0; };
 
@@ -132,34 +177,104 @@ int main() {
 	Sphere.writer(0.5);
 
 	objects.insert(objects.begin(), Sphere);
+	vector<float> vertsVec = objects[0].getVerts();
+	vertsVec = {  0.5f,  0.5f, 1.0f, 0.0f, 0.0f,
+				  0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+				 -0.5f, -0.5f, 0.0f, 0.0f, 1.0f,
+				 -0.5f,  0.5f, 0.5f, 0.5f, 0.5f };
+	float verts[20];
+	copy(vertsVec.begin(), vertsVec.end(), verts);
 
-	int i = 0;
+	//const GLchar* vertexSource = ("./Shaders.vert");
+	//const GLchar* fragmentSource = ("./Shaders.frag");
+
+	GLuint vao;
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+
+	cout << sizeof(verts) << endl;
 
 	GLuint vbo;
 	glGenBuffers(1, &vbo);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	float* ptr = objects[0].getVerts().data();
-	glBufferData(GL_ARRAY_BUFFER, objects[0].getVerts().size(), ptr, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_DYNAMIC_DRAW);
+
+	GLuint elements[] = { 
+		0, 1, 2, 2, 3, 0
+	};
+	GLuint ebo;
+	glGenBuffers(1, &ebo);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elements), elements, GL_STATIC_DRAW);
+
+	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(vertexShader, 1, &vertexSource, NULL);
+	glCompileShader(vertexShader);
+
+	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
+	glCompileShader(fragmentShader);
+
+	GLuint shaderProgram = glCreateProgram();
+	glAttachShader(shaderProgram, vertexShader);
+	glAttachShader(shaderProgram, fragmentShader);
+	glBindFragDataLocation(shaderProgram, 0, "colorOut");
+	glLinkProgram(shaderProgram);
+	glUseProgram(shaderProgram);
+
+	GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
+	glEnableVertexAttribArray(posAttrib);
+	glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 5*sizeof(float), 0);
+
+	GLint colAttrib = glGetAttribLocation(shaderProgram, "colorVert");
+	glEnableVertexAttribArray(colAttrib);
+	glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 5*sizeof(float), (void*)(2*sizeof(float)));
+
+
+	//cout << glGetError() << endl;
+
+	//GLint uniColor = glGetUniformLocation(shaderProgram, "triangleColor");
+
+	float time1 = 0, time2 = 0, timeDiff = 0;
+	int i= 0;
 
 	//main loop
 	while (!glfwWindowShouldClose(window) && loopExit == 0) {
-		int width, height;
-		glfwGetFramebufferSize(window, &width, &height);
+		glTime = float(glfwGetTime());
+
+		if (i % 2 == 0) {
+			time1 = glTime;
+		}
+		else {
+			time2 = glTime;
+		};
+		i++;
+
+		timeDiff = abs(time2 - time1);
 
 		//render above
+		int width, height;
+		glfwGetFramebufferSize(window, &width, &height);
 		glViewport(0, 0, width, height);
 		glClear(GL_COLOR_BUFFER_BIT);
+		glDrawElements(GL_TRIANGLES, /*sizeof(elements) / sizeof(GLuint)*/ 3, GL_UNSIGNED_INT, 0);
 
-		physicsSim();
-		
-		Sleep(t * 1000.0f);
-		i = i + 1;
+		physicsSim(timeDiff);
+		//vertsVec = objects[0].getVerts();
+		//vertsVec = { vertsVec[0] , vertsVec[1] , (cos(glTime) + 1) / 2, (cos(glTime + (4 * fM_PI) / 3) + 1) / 2, (cos(glTime + (2 * fM_PI) / 3) + 1) / 2,
+		//		     vertsVec[5] , vertsVec[6] , (cos(glTime + (2 * fM_PI) / 3) + 1) / 2, (cos(glTime) + 1) / 2, (cos(glTime + (4 * fM_PI) / 3) + 1) / 2,
+		//		     vertsVec[10], vertsVec[11], (cos(glTime + (4 * fM_PI) / 3) + 1) / 2, (cos(glTime + (2 * fM_PI) / 3) + 1) / 2, (cos(glTime) + 1) / 2 };
+		//copy(vertsVec.begin(), vertsVec.end(), verts);
+		//objects[0].writeVerts(vertsVec);
 
-		
-		glfwSwapBuffers(window);
+		//Sleep(t * 1000.0f);
 		glfwPollEvents();
+		glfwSwapBuffers(window);
+
+		cout << glGetError() << endl;
 	};
-	
+
 	glfwDestroyWindow(window);
 	glfwTerminate();
 	return 0;
