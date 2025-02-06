@@ -16,12 +16,12 @@ using namespace std;
 
 //environemnt variables, in meters
 array<float, 3> boundaries = { 20, 20, 20 };
-float t = 0.006f;
+float t = 0.001f;
 float g = 9.81f;
 int loopExit = 0;
 float glTime = float(glfwGetTime());
 float fM_PI = float(M_PI);
-int resx = 800, resy = 800;
+int resx = 1280, resy = 720;
 
 //origin point and velocity storage for generic physics object
 class PhysObj {
@@ -36,10 +36,14 @@ public:
 		pos = { 0,0,0 };
 		vel = { 0,0,0 };
 		r = 0.5f;
-		verts = { 0.1f,  0.1f, 1.0f, 0.0f, 0.0f, 
-				  0.1f, -0.1f, 0.0f, 1.0f, 0.0f,
-				 -0.1f, -0.1f, 0.0f, 0.0f, 1.0f,
-				 -0.1f,  0.1f, 1.0f, 1.0f, 1.0f };
+		verts = { (pos[0] / boundaries[0]) + (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) + (0.1f / (boundaries[2] / 20)), 1.0f, 0.0f, 0.0f,
+				  (pos[0] / boundaries[0]) + (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) - (0.1f / (boundaries[2] / 20)), 0.0f, 1.0f, 0.0f,
+				  (pos[0] / boundaries[0]) - (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) - (0.1f / (boundaries[2] / 20)), 0.0f, 0.0f, 1.0f,
+				  (pos[0] / boundaries[0]) - (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) + (0.1f / (boundaries[2] / 20)), 1.0f, 1.0f, 1.0f };
+		verts = { (pos[0]) + (0.1f / 20), (pos[2]) + (0.1f / 20), 1.0f, 0.0f, 0.0f,
+				  (pos[0]) + (0.1f / 20), (pos[2]) - (0.1f / 20), 0.0f, 1.0f, 0.0f,
+				  (pos[0]) - (0.1f / 20), (pos[2]) - (0.1f / 20), 0.0f, 0.0f, 1.0f,
+				  (pos[0]) - (0.1f / 20), (pos[2]) + (0.1f / 20), 1.0f, 1.0f, 1.0f };
 	};
 
 	PhysObj(array<float, 3> posInit, array<float, 3> velInit, float rInit) {
@@ -50,15 +54,14 @@ public:
 
 	void writePos(array<float, 3> posNew) {
 		pos = posNew;
-		//verts = { pos[0] / 20 + 0.1f, pos[2] / 20 + 0.1f, verts[2] , verts[3] , verts[4] ,
-		//		  pos[0] / 20 + 0.1f, pos[2] / 20 - 0.1f, verts[7] , verts[8] , verts[9] ,
-		//		  pos[0] / 20 - 0.1f, pos[2] / 20 - 0.1f, verts[12], verts[13], verts[14],
-		//		  pos[0] / 20 - 0.1f, pos[2] / 20 + 0.1f, verts[17], verts[18], verts[19] };
-
-		verts = { pos[0] + 0.1f, pos[2] + 0.1f, verts[2] , verts[3] , verts[4] ,
-				  pos[0] + 0.1f, pos[2] - 0.1f, verts[7] , verts[8] , verts[9] ,
-				  pos[0] - 0.1f, pos[2] - 0.1f, verts[12], verts[13], verts[14],
-				  pos[0] - 0.1f, pos[2] + 0.1f, verts[17], verts[18], verts[19] };
+		verts = { (pos[0] / boundaries[0]) + (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) + (0.1f / (boundaries[2] / 20)), verts[2] , verts[3] , verts[4] ,
+				  (pos[0] / boundaries[0]) + (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) - (0.1f / (boundaries[2] / 20)), verts[7] , verts[8] , verts[9] ,
+				  (pos[0] / boundaries[0]) - (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) - (0.1f / (boundaries[2] / 20)), verts[12], verts[13], verts[14],
+				  (pos[0] / boundaries[0]) - (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) + (0.1f / (boundaries[2] / 20)), verts[17], verts[18], verts[19] };
+		verts = { (pos[0] ) + (0.1f / 20), (pos[2] ) + (0.1f / 20), verts[2] , verts[3] , verts[4] ,
+				  (pos[0] ) + (0.1f / 20), (pos[2] ) - (0.1f / 20), verts[7] , verts[8] , verts[9] ,
+				  (pos[0] ) - (0.1f / 20), (pos[2] ) - (0.1f / 20), verts[12], verts[13], verts[14],
+				  (pos[0] ) - (0.1f / 20), (pos[2] ) + (0.1f / 20), verts[17], verts[18], verts[19] };
 	};
 
 	void writeVel(array<float, 3> velNew) {
@@ -94,18 +97,32 @@ vector<PhysObj> objects;
 
 //main sim
 void physicsSim(float deltaT) {
+	array<float, 3> pos;
+	array<float, 3> vel;
+	float r, outbound, inbound, fracout, fracin;
+
 	for (int iter = 0; iter < objects.size(); iter++) {
-		array<float, 3> pos = objects[iter].getPos();
-		array<float, 3> vel = objects[iter].getVel();
-		float r = objects[iter].getr();
+		pos = objects[iter].getPos();
+		vel = objects[iter].getVel();
+		r = objects[iter].getr();
 
-		cout << deltaT << endl;
-
-		//if object were to move past boundary in next frame, don't update position, invert velocity
+		//if object were to move past boundary in next frame, update position to vel - remaining distance to wall, invert velocity, account for gravity inbetween timestep
 		for (int coll = 0; coll < pos.size(); coll++) {
 			if (pos[coll] - r + vel[coll] * deltaT <= -boundaries[coll] || pos[coll] + r + vel[coll] * deltaT >= boundaries[coll]) {
-				vel[coll] = -vel[coll];
-				//pos[coll] = pos[coll] - (pos[coll] / abs(pos[coll])) * (abs(pos[coll]) - boundaries[coll]);
+				outbound = abs(vel[coll] * deltaT) - (boundaries[coll] - abs(pos[coll])) + r;
+				inbound = abs(vel[coll] * deltaT) - outbound;
+				fracout = (outbound / abs(vel[coll] * deltaT));
+				fracin = (inbound / abs(vel[coll] * deltaT));
+
+				if (coll == 2) {
+					pos[coll] = copysign(1.0, pos[coll]) * (boundaries[coll] - outbound - r);
+					vel[coll] = vel[coll] - (g * deltaT) * fracin;
+					vel[coll] = -vel[coll];
+					vel[coll] = vel[coll] - (g * deltaT) * fracout;
+				}
+				else {
+					vel[coll] = -vel[coll];
+				};
 			}
 			else {
 				pos[coll] = pos[coll] + vel[coll] * deltaT;
@@ -137,12 +154,13 @@ const GLchar* vertexSource = R"glsl(
 	in vec3 colorVert;
 
 	uniform vec2 positionSphere;
+	uniform vec2 boundaries;
 
 	out vec3 colorFrag;
 
 	void main() {
 		vec2 positionNew;
-		positionNew = position + positionSphere;
+		positionNew = (position / boundaries) * 400 + positionSphere;
 		colorFrag = colorVert;
 		gl_Position = vec4(positionNew, 0.0, 1.0);
 	};
@@ -180,14 +198,16 @@ int main() {
 	//set escape key callback and current context
 	glfwSetKeyCallback(window, keyCallback);
 	glfwMakeContextCurrent(window);
-	glfwSwapInterval(1);
+	glfwSwapInterval(0);
 	gladLoadGL();
+
+	boundaries = { float(resx / 40), boundaries[1], float(resy / 40) };
 
 	//init object and push to vector
 	PhysObj Sphere;
 	Sphere.writePos({ 0, 0, 0 });
-	Sphere.writeVel({ 5, 0, 20 });
-	Sphere.writer(0.5);
+	Sphere.writeVel({ 5, 0, 25 });
+	Sphere.writer(1.5);
 
 	objects.insert(objects.begin(), Sphere);
 	vector<float> vertsVec = objects[0].getVerts();
@@ -248,6 +268,7 @@ int main() {
 	//cout << glGetError() << endl;
 
 	GLint uniPos = glGetUniformLocation(shaderProgram, "positionSphere");
+	GLint shaderBoundary = glGetUniformLocation(shaderProgram, "boundaries");
 
 	float time1 = 0, time2 = 0, deltaT = 0;
 	int i= 0;
@@ -265,7 +286,10 @@ int main() {
 		};
 		i++;
 
+		//cout << i / glTime << endl;
+
 		deltaT = abs(time2 - time1);
+		//cout << deltaT << endl;
 
 		//render above
 		int width, height;
@@ -275,21 +299,24 @@ int main() {
 		glDrawElements(GL_TRIANGLES, sizeof(elements) / sizeof(GLuint), GL_UNSIGNED_INT, 0);
 
 		physicsSim(deltaT);
-		//vertsVec = objects[0].getVerts();
+		vertsVec = objects[0].getVerts();
 		//vertsVec = { vertsVec[0] , vertsVec[1] , (cos(glTime) + 1) / 2, (cos(glTime + (4 * fM_PI) / 3) + 1) / 2, (cos(glTime + (2 * fM_PI) / 3) + 1) / 2,
 		//		     vertsVec[5] , vertsVec[6] , (cos(glTime + (2 * fM_PI) / 3) + 1) / 2, (cos(glTime) + 1) / 2, (cos(glTime + (4 * fM_PI) / 3) + 1) / 2,
 		//		     vertsVec[10], vertsVec[11], (cos(glTime + (4 * fM_PI) / 3) + 1) / 2, (cos(glTime + (2 * fM_PI) / 3) + 1) / 2, (cos(glTime) + 1) / 2 };
-		//copy(vertsVec.begin(), vertsVec.end(), verts);
-		//objects[0].writeVerts(vertsVec);
-
-		//Sleep(t * 1000.0f);
+		copy(vertsVec.begin(), vertsVec.end(), verts);
+		objects[0].writeVerts(vertsVec);
 
 		positionNew = { objects[0].getPos()[0], objects[0].getPos()[2] };
 		//cout << positionNew[0] << " " << positionNew[1] << endl;
 		glUniform2f(uniPos, positionNew[0]/boundaries[0], positionNew[1]/boundaries[2]);
+		glUniform2f(shaderBoundary, boundaries[0], boundaries[2]);
+
+		boundaries = {float(width / 40), boundaries[1], float(height / 40) };
 
 		glfwPollEvents();
 		glfwSwapBuffers(window);
+
+		//Sleep(0.1);
 
 		//cout << glGetError() << endl;
 	};
