@@ -18,28 +18,24 @@ using namespace std;
 array<float, 3> boundaries = { 20, 20, 20 };
 float t = 0.001f;
 float g = 9.81f;
-int loopExit = 0;
 float glTime = float(glfwGetTime());
 float fM_PI = float(M_PI);
+int loopExit = 0;
 int resx = 1280, resy = 720;
 
 //origin point and velocity storage for generic physics object
 class PhysObj {
 private:
-	// x, y, z format where z is height
+	// x, y, z format where z is height (for now)
 	array<float, 3> pos;
 	array<float, 3> vel;
-	float r;
 	vector<float> verts;
+	float r;
 public:
 	PhysObj() {
 		pos = { 0,0,0 };
 		vel = { 0,0,0 };
 		r = 0.5f;
-		verts = { (pos[0] / boundaries[0]) + (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) + (0.1f / (boundaries[2] / 20)), 1.0f, 0.0f, 0.0f,
-				  (pos[0] / boundaries[0]) + (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) - (0.1f / (boundaries[2] / 20)), 0.0f, 1.0f, 0.0f,
-				  (pos[0] / boundaries[0]) - (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) - (0.1f / (boundaries[2] / 20)), 0.0f, 0.0f, 1.0f,
-				  (pos[0] / boundaries[0]) - (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) + (0.1f / (boundaries[2] / 20)), 1.0f, 1.0f, 1.0f };
 		verts = { (pos[0]) + (0.1f / 20), (pos[2]) + (0.1f / 20), 1.0f, 0.0f, 0.0f,
 				  (pos[0]) + (0.1f / 20), (pos[2]) - (0.1f / 20), 0.0f, 1.0f, 0.0f,
 				  (pos[0]) - (0.1f / 20), (pos[2]) - (0.1f / 20), 0.0f, 0.0f, 1.0f,
@@ -54,10 +50,6 @@ public:
 
 	void writePos(array<float, 3> posNew) {
 		pos = posNew;
-		verts = { (pos[0] / boundaries[0]) + (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) + (0.1f / (boundaries[2] / 20)), verts[2] , verts[3] , verts[4] ,
-				  (pos[0] / boundaries[0]) + (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) - (0.1f / (boundaries[2] / 20)), verts[7] , verts[8] , verts[9] ,
-				  (pos[0] / boundaries[0]) - (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) - (0.1f / (boundaries[2] / 20)), verts[12], verts[13], verts[14],
-				  (pos[0] / boundaries[0]) - (0.1f / (boundaries[0] / 20)), (pos[2] / boundaries[2]) + (0.1f / (boundaries[2] / 20)), verts[17], verts[18], verts[19] };
 		verts = { (pos[0] ) + (0.1f / 20), (pos[2] ) + (0.1f / 20), verts[2] , verts[3] , verts[4] ,
 				  (pos[0] ) + (0.1f / 20), (pos[2] ) - (0.1f / 20), verts[7] , verts[8] , verts[9] ,
 				  (pos[0] ) - (0.1f / 20), (pos[2] ) - (0.1f / 20), verts[12], verts[13], verts[14],
@@ -106,7 +98,7 @@ void physicsSim(float deltaT) {
 		vel = objects[iter].getVel();
 		r = objects[iter].getr();
 
-		//if object were to move past boundary in next frame, update position to vel - remaining distance to wall, invert velocity, account for gravity inbetween timestep
+		//if object were to move past boundary in next frame, update position to vel - remaining distance to wall, invert velocity, account for gravity inbetween timestep on top and bottom collisions
 		for (int coll = 0; coll < pos.size(); coll++) {
 			if (pos[coll] - r + vel[coll] * deltaT <= -boundaries[coll] || pos[coll] + r + vel[coll] * deltaT >= boundaries[coll]) {
 				outbound = abs(vel[coll] * deltaT) - (boundaries[coll] - abs(pos[coll])) + r;
@@ -129,14 +121,9 @@ void physicsSim(float deltaT) {
 			};
 		};
 
-		//update position based on velocity, then update velocity
-		//pos = { pos[0] + vel[0], pos[1] + vel[1], pos[2] + vel[2] };
 		vel = { vel[0], vel[1], (vel[2] - g * deltaT) };
-
 		objects[iter].writePos(pos);
 		objects[iter].writeVel(vel);
-
-		//cout << "xpos: " << objects[iter].getPos()[0] << " " << "ypos: " << objects[iter].getPos()[1] << " " << "zpos: " << objects[iter].getPos()[2] << endl;
 	};
 };
 
@@ -210,17 +197,11 @@ int main() {
 	Sphere.writer(1.5);
 
 	objects.insert(objects.begin(), Sphere);
-	vector<float> vertsVec = objects[0].getVerts();
-	//vertsVec = {  0.5f,  0.5f, 1.0f, 0.0f, 0.0f,
-	//			  0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-	//			 -0.5f, -0.5f, 0.0f, 0.0f, 1.0f,
-	//			 -0.5f,  0.5f, 0.5f, 0.5f, 0.5f };
 	float verts[20];
+	vector<float> vertsVec = objects[0].getVerts();
 	copy(vertsVec.begin(), vertsVec.end(), verts);
 
-	//const GLchar* vertexSource = ("./Shaders.vert");
-	//const GLchar* fragmentSource = ("./Shaders.frag");
-
+	//truthfully no clue how any of this works really
 	GLuint vao;
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
@@ -237,7 +218,6 @@ int main() {
 	};
 	GLuint ebo;
 	glGenBuffers(1, &ebo);
-
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elements), elements, GL_STATIC_DRAW);
 
@@ -264,17 +244,17 @@ int main() {
 	glEnableVertexAttribArray(colAttrib);
 	glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 5*sizeof(float), (void*)(2*sizeof(float)));
 
-
 	//cout << glGetError() << endl;
 
 	GLint uniPos = glGetUniformLocation(shaderProgram, "positionSphere");
 	GLint shaderBoundary = glGetUniformLocation(shaderProgram, "boundaries");
 
+	array<float, 2> positionNew;
 	float time1 = 0, time2 = 0, deltaT = 0;
 	int i= 0;
-	array<float, 2> positionNew;
+	int width, height;
 
-	//main loop
+	//main loop, multithread physics and rendering later preferrably
 	while (!glfwWindowShouldClose(window) && loopExit == 0) {
 		glTime = float(glfwGetTime());
 
@@ -284,15 +264,11 @@ int main() {
 		else {
 			time2 = glTime;
 		};
-		i++;
-
-		//cout << i / glTime << endl;
-
 		deltaT = abs(time2 - time1);
+		i++;
 		//cout << deltaT << endl;
 
-		//render above
-		int width, height;
+		//draw call and frame size
 		glfwGetFramebufferSize(window, &width, &height);
 		glViewport(0, 0, width, height);
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -300,14 +276,10 @@ int main() {
 
 		physicsSim(deltaT);
 		vertsVec = objects[0].getVerts();
-		//vertsVec = { vertsVec[0] , vertsVec[1] , (cos(glTime) + 1) / 2, (cos(glTime + (4 * fM_PI) / 3) + 1) / 2, (cos(glTime + (2 * fM_PI) / 3) + 1) / 2,
-		//		     vertsVec[5] , vertsVec[6] , (cos(glTime + (2 * fM_PI) / 3) + 1) / 2, (cos(glTime) + 1) / 2, (cos(glTime + (4 * fM_PI) / 3) + 1) / 2,
-		//		     vertsVec[10], vertsVec[11], (cos(glTime + (4 * fM_PI) / 3) + 1) / 2, (cos(glTime + (2 * fM_PI) / 3) + 1) / 2, (cos(glTime) + 1) / 2 };
 		copy(vertsVec.begin(), vertsVec.end(), verts);
 		objects[0].writeVerts(vertsVec);
 
 		positionNew = { objects[0].getPos()[0], objects[0].getPos()[2] };
-		//cout << positionNew[0] << " " << positionNew[1] << endl;
 		glUniform2f(uniPos, positionNew[0]/boundaries[0], positionNew[1]/boundaries[2]);
 		glUniform2f(shaderBoundary, boundaries[0], boundaries[2]);
 
@@ -317,7 +289,6 @@ int main() {
 		glfwSwapBuffers(window);
 
 		//Sleep(0.1);
-
 		//cout << glGetError() << endl;
 	};
 
