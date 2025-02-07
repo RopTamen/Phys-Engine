@@ -36,10 +36,10 @@ public:
 		pos = { 0,0,0 };
 		vel = { 0,0,0 };
 		r = 0.5f;
-		verts = { (pos[0]), (pos[1]), (pos[2]), 1.0f, 0.0f, 0.0f,
-				  (pos[0]), (pos[1]), (pos[2]), 0.0f, 1.0f, 0.0f,
-				  (pos[0]), (pos[1]), (pos[2]), 0.0f, 0.0f, 1.0f,
-				  (pos[0]), (pos[1]), (pos[2]), 1.0f, 1.0f, 1.0f };
+		verts = {  + 0.1f / 20,  + 0.1f / 20, 0.0f, 1.0f, 0.0f, 0.0f,
+				   + 0.1f / 20,  - 0.1f / 20, 0.0f, 0.0f, 1.0f, 0.0f,
+				   - 0.1f / 20,  - 0.1f / 20, 0.0f, 0.0f, 0.0f, 1.0f,
+				   - 0.1f / 20,  + 0.1f / 20, 0.0f, 1.0f, 1.0f, 1.0f };
 	};
 
 	PhysObj(array<float, 3> posInit, array<float, 3> velInit, float rInit) {
@@ -50,10 +50,10 @@ public:
 
 	void writePos(array<float, 3> posNew) {
 		pos = posNew;
-		verts = { (pos[0]), (pos[1]), (pos[2]), verts[2] , verts[3] , verts[4] ,
-				  (pos[0]), (pos[1]), (pos[2]), verts[7] , verts[8] , verts[9] ,
-				  (pos[0]), (pos[1]), (pos[2]), verts[12], verts[13], verts[14],
-				  (pos[0]), (pos[1]), (pos[2]), verts[17], verts[18], verts[19] };
+		//verts = { (pos[0]) + 0.1f / 20, (pos[1]) + 0.1f / 20, (pos[2]), verts[3] , verts[4] , verts[5] ,
+		//		  (pos[0]) + 0.1f / 20, (pos[1]) - 0.1f / 20, (pos[2]), verts[8] , verts[9] , verts[10],
+		//		  (pos[0]) - 0.1f / 20, (pos[1]) - 0.1f / 20, (pos[2]), verts[13], verts[14], verts[15],
+		//		  (pos[0]) - 0.1f / 20, (pos[1]) + 0.1f / 20, (pos[2]), verts[18], verts[19], verts[20] };
 	};
 
 	void writeVel(array<float, 3> velNew) {
@@ -107,7 +107,7 @@ void physicsSim(float deltaT) {
 				fracin = (inbound / abs(vel[coll] * deltaT));
 
 				if (coll == 1) {
-					pos[coll] = copysign(1.0, pos[coll]) * (boundaries[coll] - outbound - r);
+					pos[coll] = copysign(1.0f, pos[coll]) * (boundaries[coll] - outbound - r);
 					vel[coll] = vel[coll] - (g * deltaT) * fracin;
 					vel[coll] = -vel[coll];
 					vel[coll] = vel[coll] - (g * deltaT) * fracout;
@@ -147,7 +147,7 @@ const GLchar* vertexSource = R"glsl(
 
 	void main() {
 		vec3 positionNew;
-		positionNew = (position / boundaries) + positionSphere;
+		positionNew = (position / boundaries * 400) + positionSphere;
 		colorFrag = colorVert;
 		gl_Position = vec4(positionNew, 1.0);
 	};
@@ -163,9 +163,8 @@ const GLchar* fragmentSource = R"glsl(
 	void main() {
 		vec3 color;
 		color = colorFrag;
-		color = (1.0f, 1.0f, 1.0f) - colorFrag;
+		//color = (1.0f, 1.0f, 1.0f) - colorFrag;
 		colorOut = vec4(color, 1.0f);
-		//colorOut = vec4(1.0f, 1.0f, 1.0f, 1.0f);
 	};
 )glsl";
 
@@ -200,11 +199,12 @@ int main() {
 	objects.insert(objects.begin(), Sphere);
 	float verts[24];
 	vector<float> vertsVec = objects[0].getVerts();
-	vertsVec = {0.1, 0.1, 0, 1, 1, 1,
-				0.1, -0.1, 0, 1, 1, 1,
-				-0.1, -0.1, 0, 1, 1, 1,
-				-0.1, 0.1, 0, 1, 1, 1};
 	copy(vertsVec.begin(), vertsVec.end(), verts);
+
+	for (int l = 0; l < sizeof(verts) / sizeof(float); l++) {
+		cout << verts[l] << " ";
+	};
+	cout << endl;
 
 	//truthfully no clue how any of this works really
 	GLuint vao;
@@ -297,15 +297,18 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT);
 		glDrawElements(GL_TRIANGLES, sizeof(elements) / sizeof(GLuint), GL_UNSIGNED_INT, 0);
 
-		//physicsSim(deltaT);
+		physicsSim(deltaT);
 		//vertsVec = objects[0].getVerts();
 		//copy(vertsVec.begin(), vertsVec.end(), verts);
 		//objects[0].writeVerts(vertsVec);
 
-		positionNew = { 0.0, 0.0, 0.0 };
-		//positionNew = { objects[0].getPos()[0], objects[0].getPos()[1], objects[0].getPos()[2] };
+		//positionNew = { 0.0, 0.0, 0.0 };
+		positionNew = { objects[0].getPos()[0], objects[0].getPos()[1], objects[0].getPos()[2] };
 		glUniform3f(uniPos, positionNew[0]/boundaries[0], positionNew[1]/boundaries[1], positionNew[0] / boundaries[2]);
 		glUniform3f(shaderBoundary, boundaries[0], boundaries[1], boundaries[2]);
+		cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
+		cout << positionNew[0] << " " << positionNew[1] << " " << positionNew[2] << " " << endl;
+
 
 		boundaries = {float(width / 40), float(height / 40), boundaries[2] };
 

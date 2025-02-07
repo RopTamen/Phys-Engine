@@ -133,8 +133,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\glad\src\glad.c" />
     <ClCompile Include="BaseLayer.cpp" />
+    <ClCompile Include="glad.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders.frag" />
