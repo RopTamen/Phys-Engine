@@ -36,10 +36,10 @@ public:
 		pos = { 0,0,0 };
 		vel = { 0,0,0 };
 		r = 0.5f;
-		verts = { (pos[0]) + (0.1f / 20), (pos[2]) + (0.1f / 20), 1.0f, 0.0f, 0.0f,
-				  (pos[0]) + (0.1f / 20), (pos[2]) - (0.1f / 20), 0.0f, 1.0f, 0.0f,
-				  (pos[0]) - (0.1f / 20), (pos[2]) - (0.1f / 20), 0.0f, 0.0f, 1.0f,
-				  (pos[0]) - (0.1f / 20), (pos[2]) + (0.1f / 20), 1.0f, 1.0f, 1.0f };
+		verts = { (pos[0]), (pos[1]), (pos[2]), 1.0f, 0.0f, 0.0f,
+				  (pos[0]), (pos[1]), (pos[2]), 0.0f, 1.0f, 0.0f,
+				  (pos[0]), (pos[1]), (pos[2]), 0.0f, 0.0f, 1.0f,
+				  (pos[0]), (pos[1]), (pos[2]), 1.0f, 1.0f, 1.0f };
 	};
 
 	PhysObj(array<float, 3> posInit, array<float, 3> velInit, float rInit) {
@@ -50,10 +50,10 @@ public:
 
 	void writePos(array<float, 3> posNew) {
 		pos = posNew;
-		verts = { (pos[0] ) + (0.1f / 20), (pos[2] ) + (0.1f / 20), verts[2] , verts[3] , verts[4] ,
-				  (pos[0] ) + (0.1f / 20), (pos[2] ) - (0.1f / 20), verts[7] , verts[8] , verts[9] ,
-				  (pos[0] ) - (0.1f / 20), (pos[2] ) - (0.1f / 20), verts[12], verts[13], verts[14],
-				  (pos[0] ) - (0.1f / 20), (pos[2] ) + (0.1f / 20), verts[17], verts[18], verts[19] };
+		verts = { (pos[0]), (pos[1]), (pos[2]), verts[2] , verts[3] , verts[4] ,
+				  (pos[0]), (pos[1]), (pos[2]), verts[7] , verts[8] , verts[9] ,
+				  (pos[0]), (pos[1]), (pos[2]), verts[12], verts[13], verts[14],
+				  (pos[0]), (pos[1]), (pos[2]), verts[17], verts[18], verts[19] };
 	};
 
 	void writeVel(array<float, 3> velNew) {
@@ -106,7 +106,7 @@ void physicsSim(float deltaT) {
 				fracout = (outbound / abs(vel[coll] * deltaT));
 				fracin = (inbound / abs(vel[coll] * deltaT));
 
-				if (coll == 2) {
+				if (coll == 1) {
 					pos[coll] = copysign(1.0, pos[coll]) * (boundaries[coll] - outbound - r);
 					vel[coll] = vel[coll] - (g * deltaT) * fracin;
 					vel[coll] = -vel[coll];
@@ -121,7 +121,7 @@ void physicsSim(float deltaT) {
 			};
 		};
 
-		vel = { vel[0], vel[1], (vel[2] - g * deltaT) };
+		vel = { vel[0], vel[1] - g * deltaT, vel[2] };
 		objects[iter].writePos(pos);
 		objects[iter].writeVel(vel);
 	};
@@ -137,19 +137,19 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 const GLchar* vertexSource = R"glsl(
 	#version 460 core
 
-	in vec2 position;
+	in vec3 position;
 	in vec3 colorVert;
 
-	uniform vec2 positionSphere;
-	uniform vec2 boundaries;
+	uniform vec3 positionSphere;
+	uniform vec3 boundaries;
 
 	out vec3 colorFrag;
 
 	void main() {
-		vec2 positionNew;
-		positionNew = (position / boundaries) * 400 + positionSphere;
+		vec3 positionNew;
+		positionNew = (position / boundaries) + positionSphere;
 		colorFrag = colorVert;
-		gl_Position = vec4(positionNew, 0.0, 1.0);
+		gl_Position = vec4(positionNew, 1.0);
 	};
 )glsl";
 
@@ -163,8 +163,9 @@ const GLchar* fragmentSource = R"glsl(
 	void main() {
 		vec3 color;
 		color = colorFrag;
-		color = (1.0, 1.0, 1.0) - colorFrag;
-		colorOut = vec4(color, 1.0);
+		color = (1.0f, 1.0f, 1.0f) - colorFrag;
+		colorOut = vec4(color, 1.0f);
+		//colorOut = vec4(1.0f, 1.0f, 1.0f, 1.0f);
 	};
 )glsl";
 
@@ -188,17 +189,21 @@ int main() {
 	glfwSwapInterval(0);
 	gladLoadGL();
 
-	boundaries = { float(resx / 40), boundaries[1], float(resy / 40) };
+	boundaries = { float(resx / 40), float(resy / 40), boundaries[2] };
 
 	//init object and push to vector
 	PhysObj Sphere;
 	Sphere.writePos({ 0, 0, 0 });
-	Sphere.writeVel({ 5, 0, 25 });
+	Sphere.writeVel({ 5, 5, 0 });
 	Sphere.writer(1.5);
 
 	objects.insert(objects.begin(), Sphere);
-	float verts[20];
+	float verts[24];
 	vector<float> vertsVec = objects[0].getVerts();
+	vertsVec = {0.1, 0.1, 0, 1, 1, 1,
+				0.1, -0.1, 0, 1, 1, 1,
+				-0.1, -0.1, 0, 1, 1, 1,
+				-0.1, 0.1, 0, 1, 1, 1};
 	copy(vertsVec.begin(), vertsVec.end(), verts);
 
 	//truthfully no clue how any of this works really
@@ -221,13 +226,28 @@ int main() {
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elements), elements, GL_STATIC_DRAW);
 
+	//int  success;
+	//char infoLog[512];
+
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertexShader, 1, &vertexSource, NULL);
 	glCompileShader(vertexShader);
+	/*glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+	if (!success)
+	{
+		glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
+	};*/
 
 	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
 	glCompileShader(fragmentShader);
+	/*glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+	if (!success)
+	{
+		glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
+	};*/
 
 	GLuint shaderProgram = glCreateProgram();
 	glAttachShader(shaderProgram, vertexShader);
@@ -236,20 +256,23 @@ int main() {
 	glLinkProgram(shaderProgram);
 	glUseProgram(shaderProgram);
 
+	glDeleteShader(vertexShader);
+	glDeleteShader(fragmentShader);
+
 	GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
 	glEnableVertexAttribArray(posAttrib);
-	glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 5*sizeof(float), 0);
+	glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), 0);
 
 	GLint colAttrib = glGetAttribLocation(shaderProgram, "colorVert");
 	glEnableVertexAttribArray(colAttrib);
-	glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 5*sizeof(float), (void*)(2*sizeof(float)));
+	glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (void*)(3*sizeof(float)));
 
-	//cout << glGetError() << endl;
+	cout << glGetError() << endl;
 
 	GLint uniPos = glGetUniformLocation(shaderProgram, "positionSphere");
 	GLint shaderBoundary = glGetUniformLocation(shaderProgram, "boundaries");
 
-	array<float, 2> positionNew;
+	array<float, 3> positionNew;
 	float time1 = 0, time2 = 0, deltaT = 0;
 	int i= 0;
 	int width, height;
@@ -274,16 +297,17 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT);
 		glDrawElements(GL_TRIANGLES, sizeof(elements) / sizeof(GLuint), GL_UNSIGNED_INT, 0);
 
-		physicsSim(deltaT);
-		vertsVec = objects[0].getVerts();
-		copy(vertsVec.begin(), vertsVec.end(), verts);
-		objects[0].writeVerts(vertsVec);
+		//physicsSim(deltaT);
+		//vertsVec = objects[0].getVerts();
+		//copy(vertsVec.begin(), vertsVec.end(), verts);
+		//objects[0].writeVerts(vertsVec);
 
-		positionNew = { objects[0].getPos()[0], objects[0].getPos()[2] };
-		glUniform2f(uniPos, positionNew[0]/boundaries[0], positionNew[1]/boundaries[2]);
-		glUniform2f(shaderBoundary, boundaries[0], boundaries[2]);
+		positionNew = { 0.0, 0.0, 0.0 };
+		//positionNew = { objects[0].getPos()[0], objects[0].getPos()[1], objects[0].getPos()[2] };
+		glUniform3f(uniPos, positionNew[0]/boundaries[0], positionNew[1]/boundaries[1], positionNew[0] / boundaries[2]);
+		glUniform3f(shaderBoundary, boundaries[0], boundaries[1], boundaries[2]);
 
-		boundaries = {float(width / 40), boundaries[1], float(height / 40) };
+		boundaries = {float(width / 40), float(height / 40), boundaries[2] };
 
 		glfwPollEvents();
 		glfwSwapBuffers(window);
