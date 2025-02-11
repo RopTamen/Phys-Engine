@@ -1,12 +1,13 @@
 #version 460 core
 	
-in vec3 colorFrag;
+in vec4 colorFrag;
 
 out vec4 colorOut;
 
 void main() {
-	vec3 color;
-	color = colorFrag;
+	//vec4 color;
+	//color = colorFrag;
 	//color = (1.0f, 1.0f, 1.0f) - colorFrag;
-	colorOut = vec4(color, 1.0f);
+	colorOut = colorFrag;
+	colorOut = vec4(0.5, 0.8, 0.1, 0.5);
 };

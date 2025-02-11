@@ -143,29 +143,31 @@ const GLchar* vertexSource = R"glsl(
 	uniform vec3 positionSphere;
 	uniform vec3 boundaries;
 
-	out vec3 colorFrag;
+	out vec4 colorFrag;
 
 	void main() {
 		vec3 positionNew;
-		positionNew = (position / boundaries) * 400 + positionSphere;
-		colorFrag = colorVert;
+		float alpha;
+		positionNew = (position / boundaries * 400) + positionSphere;
+		alpha = 1;
+		colorFrag = vec4(colorVert, alpha);
 		gl_Position = vec4(positionNew, 1.0);
 	};
 )glsl";
 
 const GLchar* fragmentSource = R"glsl(
-	#version 460 core
+#version 460 core
 	
-	in vec3 colorFrag;
+in vec4 colorFrag;
 
-	out vec4 colorOut;
+out vec4 colorOut;
 
-	void main() {
-		vec3 color;
-		color = colorFrag;
-		//color = (1.0f, 1.0f, 1.0f) - colorFrag;
-		colorOut = vec4(color, 1.0f);
-	};
+void main() {
+	//vec4 color;
+	//color = colorFrag;
+	//color = (1.0f, 1.0f, 1.0f) - colorFrag;
+	colorOut = colorFrag;
+};
 )glsl";
 
 
@@ -196,7 +198,13 @@ int main() {
 	Sphere.writeVel({ 5, 5, 0 });
 	Sphere.writer(1.5);
 
+	//PhysObj SphereT;
+	//SphereT.writePos({ 0, 0, 0 });
+	//SphereT.writeVel({ -2, 5, 0 });
+	//SphereT.writer(1.5);
+
 	objects.insert(objects.begin(), Sphere);
+	//objects.insert(objects.begin(), SphereT);
 	float verts[24];
 	vector<float> vertsVec = objects[0].getVerts();
 	copy(vertsVec.begin(), vertsVec.end(), verts);
@@ -216,7 +224,7 @@ int main() {
 	GLuint vbo;
 	glGenBuffers(1, &vbo);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
 
 	GLuint elements[] = { 
 		0, 1, 2, 2, 3, 0
@@ -293,22 +301,26 @@ int main() {
 
 		//draw call and frame size
 		glfwGetFramebufferSize(window, &width, &height);
+		glUseProgram(shaderProgram);
+		glBindVertexArray(vao);
 		glViewport(0, 0, width, height);
 		glClear(GL_COLOR_BUFFER_BIT);
 		glDrawElements(GL_TRIANGLES, sizeof(elements) / sizeof(GLuint), GL_UNSIGNED_INT, 0);
 
 		physicsSim(deltaT);
-		vertsVec = objects[0].getVerts();
-		copy(vertsVec.begin(), vertsVec.end(), verts);
-		objects[0].writeVerts(vertsVec);
 
-		//positionNew = { 0.0, 0.0, 0.0 };
-		positionNew = { objects[0].getPos()[0], objects[0].getPos()[1], objects[0].getPos()[2] };
-		glUniform3f(uniPos, positionNew[0]/boundaries[0], positionNew[1]/boundaries[1], positionNew[2] / boundaries[2]);
-		glUniform3f(shaderBoundary, boundaries[0], boundaries[1], boundaries[2]);
-		cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
-		cout << positionNew[0] << " " << positionNew[1] << " " << positionNew[2] << " " << endl;
+		for (int iter = 0; iter < objects.size(); iter++) {
+			//vertsVec = objects[0].getVerts();
+			//copy(vertsVec.begin(), vertsVec.end(), verts);
+			//objects[0].writeVerts(vertsVec);
 
+			//positionNew = { 0.0, 0.0, 0.0 };
+			positionNew = { objects[iter].getPos()[0], objects[iter].getPos()[1], objects[iter].getPos()[2] };
+			glUniform3f(uniPos, positionNew[0] / boundaries[0], positionNew[1] / boundaries[1], positionNew[2] / boundaries[2]);
+			glUniform3f(shaderBoundary, boundaries[0], boundaries[1], boundaries[2]);
+			cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
+			cout << positionNew[0] << " " << positionNew[1] << " " << positionNew[2] << " " << endl;
+		};
 
 		boundaries = {float(width / 40), float(height / 40), boundaries[2] };
 
