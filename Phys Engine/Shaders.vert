@@ -10,8 +10,7 @@ out vec3 colorFrag;
 
 void main() {
 	vec3 positionNew;
-	//positionNew = (position / boundaries) + positionSphere;
-	positionNew = position + positionSphere;
+	positionNew = (position / boundaries * 400) + positionSphere;
 	colorFrag = colorVert;
 	gl_Position = vec4(positionNew, 1.0);
 };

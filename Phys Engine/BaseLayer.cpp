@@ -50,10 +50,10 @@ public:
 
 	void writePos(array<float, 3> posNew) {
 		pos = posNew;
-		//verts = { (pos[0]) + 0.1f / 20, (pos[1]) + 0.1f / 20, (pos[2]), verts[3] , verts[4] , verts[5] ,
-		//		  (pos[0]) + 0.1f / 20, (pos[1]) - 0.1f / 20, (pos[2]), verts[8] , verts[9] , verts[10],
-		//		  (pos[0]) - 0.1f / 20, (pos[1]) - 0.1f / 20, (pos[2]), verts[13], verts[14], verts[15],
-		//		  (pos[0]) - 0.1f / 20, (pos[1]) + 0.1f / 20, (pos[2]), verts[18], verts[19], verts[20] };
+		verts = { pos[0] + 0.1f / 20, pos[1] + 0.1f / 20, (pos[2]), verts[3] , verts[4] , verts[5] ,
+				  pos[0] + 0.1f / 20, pos[1] - 0.1f / 20, (pos[2]), verts[9] , verts[10], verts[11],
+				  pos[0] - 0.1f / 20, pos[1] - 0.1f / 20, (pos[2]), verts[15], verts[16], verts[17],
+				  pos[0] - 0.1f / 20, pos[1] + 0.1f / 20, (pos[2]), verts[21], verts[22], verts[23] };
 	};
 
 	void writeVel(array<float, 3> velNew) {
@@ -147,7 +147,7 @@ const GLchar* vertexSource = R"glsl(
 
 	void main() {
 		vec3 positionNew;
-		positionNew = (position / boundaries * 400) + positionSphere;
+		positionNew = (position / boundaries) * 400 + positionSphere;
 		colorFrag = colorVert;
 		gl_Position = vec4(positionNew, 1.0);
 	};
@@ -298,13 +298,13 @@ int main() {
 		glDrawElements(GL_TRIANGLES, sizeof(elements) / sizeof(GLuint), GL_UNSIGNED_INT, 0);
 
 		physicsSim(deltaT);
-		//vertsVec = objects[0].getVerts();
-		//copy(vertsVec.begin(), vertsVec.end(), verts);
-		//objects[0].writeVerts(vertsVec);
+		vertsVec = objects[0].getVerts();
+		copy(vertsVec.begin(), vertsVec.end(), verts);
+		objects[0].writeVerts(vertsVec);
 
 		//positionNew = { 0.0, 0.0, 0.0 };
 		positionNew = { objects[0].getPos()[0], objects[0].getPos()[1], objects[0].getPos()[2] };
-		glUniform3f(uniPos, positionNew[0]/boundaries[0], positionNew[1]/boundaries[1], positionNew[0] / boundaries[2]);
+		glUniform3f(uniPos, positionNew[0]/boundaries[0], positionNew[1]/boundaries[1], positionNew[2] / boundaries[2]);
 		glUniform3f(shaderBoundary, boundaries[0], boundaries[1], boundaries[2]);
 		cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
 		cout << positionNew[0] << " " << positionNew[1] << " " << positionNew[2] << " " << endl;
@@ -315,7 +315,7 @@ int main() {
 		glfwPollEvents();
 		glfwSwapBuffers(window);
 
-		//Sleep(0.1);
+		Sleep(0.1);
 		//cout << glGetError() << endl;
 	};
 
