@@ -4,7 +4,7 @@ in vec3 position;
 in vec3 colorVert;
 
 uniform vec3 positionSphere;
-uniform vec3 boundaries;
+//uniform vec3 boundaries;
 
 out vec3 colorFrag;
 

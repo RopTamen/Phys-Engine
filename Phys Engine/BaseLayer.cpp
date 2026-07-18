@@ -15,13 +15,14 @@
 using namespace std;
 
 //environemnt variables, in meters
-array<float, 3> boundaries = { 20, 20, 20 };
+array<float, 3> baseboundaries = { 20, 20, 20 };
 float t = 0.001f;
 float g = 9.81f;
-float glTime = float(glfwGetTime());
 float fM_PI = float(M_PI);
 int loopExit = 0;
-int resx = 1280, resy = 720;
+int resx = 1280, resz = 720;
+
+array<float, 3> boundaries = { float(resx / 40), baseboundaries[1], float(resz / 40)};
 
 //origin point and velocity storage for generic physics object
 class PhysObj {
@@ -30,22 +31,22 @@ private:
 	array<float, 3> pos;
 	array<float, 3> vel;
 	vector<float> verts;
-	float r;
+	float rad;
 public:
 	PhysObj() {
 		pos = { 0,0,0 };
 		vel = { 0,0,0 };
-		r = 0.5f;
+		rad = 0.5f;
 		verts = {  + 0.1f / 20,  + 0.1f / 20, 0.0f, 1.0f, 0.0f, 0.0f,
 				   + 0.1f / 20,  - 0.1f / 20, 0.0f, 0.0f, 1.0f, 0.0f,
 				   - 0.1f / 20,  - 0.1f / 20, 0.0f, 0.0f, 0.0f, 1.0f,
 				   - 0.1f / 20,  + 0.1f / 20, 0.0f, 1.0f, 1.0f, 1.0f };
 	};
 
-	PhysObj(array<float, 3> posInit, array<float, 3> velInit, float rInit) {
+	PhysObj(array<float, 3> posInit, array<float, 3> velInit, float radInit) {
 		pos = posInit;
 		vel = velInit;
-		r = rInit;
+		rad = radInit;
 	};
 
 	void writePos(array<float, 3> posNew) {
@@ -60,8 +61,8 @@ public:
 		vel = velNew;
 	};
 
-	void writer(float rNew) {
-		r = rNew;
+	void writeRad(float radNew) {
+		rad = radNew;
 	};
 
 	void writeVerts(vector<float> vertsNew) {
@@ -76,8 +77,8 @@ public:
 		return vel;
 	};
 
-	float getr() {
-		return r;
+	float getRad() {
+		return rad;
 	};
 
 	vector<float> getVerts() {
@@ -91,37 +92,53 @@ vector<PhysObj> objects;
 void physicsSim(float deltaT) {
 	array<float, 3> pos;
 	array<float, 3> vel;
-	float r, outbound, inbound, fracout, fracin;
+	float rad, outOfBounds, withinBounds, fracout, fracin;
 
 	for (int iter = 0; iter < objects.size(); iter++) {
 		pos = objects[iter].getPos();
 		vel = objects[iter].getVel();
-		r = objects[iter].getr();
+		rad = objects[iter].getRad();
 
-		//if object were to move past boundary in next frame, update position to vel - remaining distance to wall, invert velocity, account for gravity inbetween timestep on top and bottom collisions
-		for (int coll = 0; coll < pos.size(); coll++) {
-			if (pos[coll] - r + vel[coll] * deltaT <= -boundaries[coll] || pos[coll] + r + vel[coll] * deltaT >= boundaries[coll]) {
-				outbound = abs(vel[coll] * deltaT) - (boundaries[coll] - abs(pos[coll])) + r;
-				inbound = abs(vel[coll] * deltaT) - outbound;
-				fracout = (outbound / abs(vel[coll] * deltaT));
-				fracin = (inbound / abs(vel[coll] * deltaT));
+		//if object were to move past boundary in next frame, update position to vel - remaining distance to wall, invert velocity, account for gravity inbetween timestep on top and bottom Axisisions
+		for (int Axis = 0; Axis <= 2; Axis++) {
+			if (abs(pos[Axis] + copysign(rad, pos[Axis]) + vel[Axis] * deltaT) >= boundaries[Axis]) {
+				
+				cout << "vel: " << vel[Axis] * deltaT << "  bound: " << boundaries[Axis] << "  pos: " << pos[Axis] << endl;
 
-				if (coll == 1) {
-					pos[coll] = copysign(1.0f, pos[coll]) * (boundaries[coll] - outbound - r);
-					vel[coll] = vel[coll] - (g * deltaT) * fracin;
-					vel[coll] = -vel[coll];
-					vel[coll] = vel[coll] - (g * deltaT) * fracout;
+				// position + radius + velocity on the next step subtracted by the boundary to establish amount of overlap
+				outOfBounds = abs(pos[Axis]) + rad + abs(vel[Axis] * deltaT) - boundaries[Axis];
+				// remaining velocity distance that would not result in the object OOB
+				withinBounds = abs(vel[Axis] * deltaT) - outOfBounds;
+				cout << Axis << " : out " << outOfBounds << "    :    in " << withinBounds << endl;
+
+				// fractions of the above values
+				fracout = (outOfBounds / abs(vel[Axis] * deltaT));
+				fracin = (withinBounds / abs(vel[Axis] * deltaT));
+				cout << Axis << " : fracout " << fracout << "    :    fracin " << fracin << endl;
+
+				if (Axis == 2) {
+					// adjust position according to velocity before collisions and remaining velocity afterwards
+					pos[2] = pos[2] - copysign(withinBounds - outOfBounds, pos[Axis]);
+					// adjust z velocity by the fraction inside and outside the boundary with gravity
+					vel[2] = vel[2] - (g * deltaT) * fracin + (g * deltaT) * fracout;
+					vel[2] = -vel[2];
 				}
 				else {
-					vel[coll] = -vel[coll];
+					// adjust all other positions by distances in and out and velocity just flips
+					pos[Axis] = pos[Axis] - copysign(withinBounds - outOfBounds, pos[Axis]);
+					vel[Axis] = -vel[Axis];
 				};
 			}
+			else if (Axis == 2) {
+				// only do gravity if collision gravity has not occured as it performs its own gravity
+				pos[2] = pos[2] + vel[2] * deltaT;
+				vel[2] = vel[2] - g * deltaT;
+			}
 			else {
-				pos[coll] = pos[coll] + vel[coll] * deltaT;
+				// objects continue along their path
+				pos[Axis] = pos[Axis] + vel[Axis] * deltaT;
 			};
 		};
-
-		vel = { vel[0], vel[1] - g * deltaT, vel[2] };
 		objects[iter].writePos(pos);
 		objects[iter].writeVel(vel);
 	};
@@ -179,7 +196,7 @@ int main() {
 	if (!glfwInit()) { return 0; };
 
 	//init window object named window with title Sample
-	GLFWwindow* window = glfwCreateWindow(resx, resy, "Sample", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(resx, resz, "Sample", NULL, NULL);
 	if (!window) { cout << "failed window creation" << endl; return 0; };
 
 	//set escape key callback and current context
@@ -188,13 +205,11 @@ int main() {
 	glfwSwapInterval(0);
 	gladLoadGL();
 
-	boundaries = { float(resx / 40), float(resy / 40), boundaries[2] };
-
 	//init object and push to vector
 	PhysObj Sphere;
 	Sphere.writePos({ 0, 0, 0 });
-	Sphere.writeVel({ 5, 5, 0 });
-	Sphere.writer(1.5);
+	Sphere.writeVel({ 5, 0, 0 });
+	Sphere.writeRad(1.5);
 
 	objects.insert(objects.begin(), Sphere);
 	float verts[24];
@@ -277,15 +292,14 @@ int main() {
 	int i= 0;
 	int width, height;
 
-	//main loop, multithread physics and rendering later preferrably
+	//main loop, multithread physics and rendering later preferrably --- I am delusional
 	while (!glfwWindowShouldClose(window) && loopExit == 0) {
-		glTime = float(glfwGetTime());
 
 		if (i % 2 == 0) {
-			time1 = glTime;
+			time1 = float(glfwGetTime());;
 		}
 		else {
-			time2 = glTime;
+			time2 = float(glfwGetTime());;
 		};
 		deltaT = abs(time2 - time1);
 		i++;
@@ -303,14 +317,15 @@ int main() {
 		//objects[0].writeVerts(vertsVec);
 
 		//positionNew = { 0.0, 0.0, 0.0 };
-		positionNew = { objects[0].getPos()[0], objects[0].getPos()[1], objects[0].getPos()[2] };
-		glUniform3f(uniPos, positionNew[0]/boundaries[0], positionNew[1]/boundaries[1], positionNew[0] / boundaries[2]);
-		glUniform3f(shaderBoundary, boundaries[0], boundaries[1], boundaries[2]);
-		cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
-		cout << positionNew[0] << " " << positionNew[1] << " " << positionNew[2] << " " << endl;
+		positionNew = { objects[0].getPos()[0], objects[0].getPos()[1], objects[0].getPos()[2]};
+		glUniform3f(uniPos, positionNew[0]/boundaries[0], positionNew[2] / boundaries[2], positionNew[1] / boundaries[1]);
+		glUniform3f(shaderBoundary, boundaries[0], boundaries[2], boundaries[1]);
+		//cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
+		//cout << positionNew[0] << " " << positionNew[1] << " " << positionNew[2] << " " << endl;
 
 
-		boundaries = {float(width / 40), float(height / 40), boundaries[2] };
+		boundaries = {float(width / 40), boundaries[1], float(height / 40)};
+		//cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
 
 		glfwPollEvents();
 		glfwSwapBuffers(window);
@@ -324,3 +339,4 @@ int main() {
 	return 0;
 };
 
+//set up multithreaded window
