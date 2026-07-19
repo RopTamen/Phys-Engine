@@ -5,6 +5,8 @@
 #include <conio.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include <thread>
+#include <atomic>
 //#include "glad.c"
 #include <KHR/khrplatform.h>
 #include <glad/glad.h>
@@ -13,6 +15,7 @@
 #include <GLFW/glfw3.h>
 
 using namespace std;
+atomic<bool> isRunning(true);
 
 //environemnt variables, in meters
 array<float, 3> boundaries = { 20, 20, 20 };
@@ -35,17 +38,17 @@ public:
 	PhysObj() {
 		pos = { 0,0,0 };
 		vel = { 0,0,0 };
-		r = 0.5f;
-		verts = { (pos[0]) + (0.1f / 20), (pos[2]) + (0.1f / 20), 1.0f, 0.0f, 0.0f,
-				  (pos[0]) + (0.1f / 20), (pos[2]) - (0.1f / 20), 0.0f, 1.0f, 0.0f,
-				  (pos[0]) - (0.1f / 20), (pos[2]) - (0.1f / 20), 0.0f, 0.0f, 1.0f,
-				  (pos[0]) - (0.1f / 20), (pos[2]) + (0.1f / 20), 1.0f, 1.0f, 1.0f };
+		rad = 0.5f;
+		verts = {  +0.1f / 20,  +0.1f / 20, 0.0f, 1.0f, 0.0f, 0.0f,
+				   +0.1f / 20,  -0.1f / 20, 0.0f, 0.0f, 1.0f, 0.0f,
+				   -0.1f / 20,  -0.1f / 20, 0.0f, 0.0f, 0.0f, 1.0f,
+				   -0.1f / 20,  +0.1f / 20, 0.0f, 1.0f, 1.0f, 1.0f };
 	};
 
-	PhysObj(array<float, 3> posInit, array<float, 3> velInit, float rInit) {
+	PhysObj(array<float, 3> posInit, array<float, 3> velInit, float radInit) {
 		pos = posInit;
 		vel = velInit;
-		r = rInit;
+		rad = radInit;
 	};
 
 	void writePos(array<float, 3> posNew) {
@@ -60,8 +63,8 @@ public:
 		vel = velNew;
 	};
 
-	void writer(float rNew) {
-		r = rNew;
+	void writeRad(float radNew) {
+		rad = radNew;
 	};
 
 	void writeVerts(vector<float> vertsNew) {
@@ -76,8 +79,8 @@ public:
 		return vel;
 	};
 
-	float getr() {
-		return r;
+	float getRad() {
+		return rad;
 	};
 
 	vector<float> getVerts() {
@@ -91,37 +94,48 @@ vector<PhysObj> objects;
 void physicsSim(float deltaT) {
 	array<float, 3> pos;
 	array<float, 3> vel;
-	float r, outbound, inbound, fracout, fracin;
+	float rad, outOfBounds, withinBounds, fracout, fracin;
 
 	for (int iter = 0; iter < objects.size(); iter++) {
 		pos = objects[iter].getPos();
 		vel = objects[iter].getVel();
-		r = objects[iter].getr();
+		rad = objects[iter].getRad();
 
-		//if object were to move past boundary in next frame, update position to vel - remaining distance to wall, invert velocity, account for gravity inbetween timestep on top and bottom collisions
-		for (int coll = 0; coll < pos.size(); coll++) {
-			if (pos[coll] - r + vel[coll] * deltaT <= -boundaries[coll] || pos[coll] + r + vel[coll] * deltaT >= boundaries[coll]) {
-				outbound = abs(vel[coll] * deltaT) - (boundaries[coll] - abs(pos[coll])) + r;
-				inbound = abs(vel[coll] * deltaT) - outbound;
-				fracout = (outbound / abs(vel[coll] * deltaT));
-				fracin = (inbound / abs(vel[coll] * deltaT));
+		//if object were to move past boundary in next frame, update position to vel - remaining distance to wall, invert velocity, account for gravity inbetween timestep on top and bottom Axisisions
+		for (int Axis = 0; Axis <= 2; Axis++) {
+			if (abs(pos[Axis] + copysign(rad, pos[Axis]) + vel[Axis] * deltaT) >= boundaries[Axis]) {
+				
+				cout << "vel: " << vel[Axis] * deltaT << "  bound: " << boundaries[Axis] << "  pos: " << pos[Axis] << endl;
 
-				if (coll == 2) {
-					pos[coll] = copysign(1.0, pos[coll]) * (boundaries[coll] - outbound - r);
-					vel[coll] = vel[coll] - (g * deltaT) * fracin;
-					vel[coll] = -vel[coll];
-					vel[coll] = vel[coll] - (g * deltaT) * fracout;
+				// position + radius + velocity on the next step subtracted by the boundary to establish amount of overlap
+				outOfBounds = abs(pos[Axis]) + rad + abs(vel[Axis] * deltaT) - boundaries[Axis];
+				// remaining velocity distance that would not result in the object OOB
+				withinBounds = abs(vel[Axis] * deltaT) - outOfBounds;
+				cout << Axis << " : out " << outOfBounds << "    :    in " << withinBounds << endl;
+
+				// fractions of the above values
+				fracout = (outOfBounds / abs(vel[Axis] * deltaT));
+				fracin = (withinBounds / abs(vel[Axis] * deltaT));
+				cout << Axis << " : fracout " << fracout << "    :    fracin " << fracin << endl;
+
+				if (Axis == 2) {
+					// adjust position according to velocity before collisions and remaining velocity afterwards
+					pos[2] = pos[2] - copysign(withinBounds - outOfBounds, pos[Axis]);
+					// adjust z velocity by the fraction inside and outside the boundary with gravity
+					vel[2] = vel[2] - (g * deltaT) * fracin + (g * deltaT) * fracout;
+					vel[2] = -vel[2];
 				}
 				else {
-					vel[coll] = -vel[coll];
+					// adjust all other positions by distances in and out and velocity just flips
+					pos[Axis] = pos[Axis] - copysign(withinBounds - outOfBounds, pos[Axis]);
+					vel[Axis] = -vel[Axis];
 				};
 			}
 			else {
-				pos[coll] = pos[coll] + vel[coll] * deltaT;
+				// objects continue along their path
+				pos[Axis] = pos[Axis] + vel[Axis] * deltaT;
 			};
 		};
-
-		vel = { vel[0], vel[1], (vel[2] - g * deltaT) };
 		objects[iter].writePos(pos);
 		objects[iter].writeVel(vel);
 	};
@@ -133,26 +147,27 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 	};
 };
 
-
+// vertex shader definition, make into separate file to read to a string later
 const GLchar* vertexSource = R"glsl(
 	#version 460 core
 
-	in vec2 position;
+	in vec3 position;
 	in vec3 colorVert;
 
-	uniform vec2 positionSphere;
-	uniform vec2 boundaries;
+	uniform vec3 positionSphere;
+	uniform vec3 boundaries;
 
 	out vec3 colorFrag;
 
 	void main() {
-		vec2 positionNew;
-		positionNew = (position / boundaries) * 400 + positionSphere;
+		vec3 positionNew;
+		positionNew = (position / boundaries * 400) + positionSphere;
 		colorFrag = colorVert;
-		gl_Position = vec4(positionNew, 0.0, 1.0);
+		gl_Position = vec4(positionNew, 1.0);
 	};
 )glsl";
 
+// fragment shader definition, make into separate file to read to a string later
 const GLchar* fragmentSource = R"glsl(
 	#version 460 core
 	
@@ -168,131 +183,224 @@ const GLchar* fragmentSource = R"glsl(
 	};
 )glsl";
 
-
 void errorCallback(int error, const char* description) {
 	fprintf(stderr, "Error: %s\n", description);
 };
 
-int main() {
+// struct for shaderSetup data
+struct shaderSetupStrc {
+	GLFWwindow* windowStrc;
+	GLint posUniformStrc;
+	GLint boundaryUniformStrc;
+};
 
-	glfwSetErrorCallback(errorCallback);
-	if (!glfwInit()) { return 0; };
-
-	//init window object named window with title Sample
-	GLFWwindow* window = glfwCreateWindow(resx, resy, "Sample", NULL, NULL);
-	if (!window) { cout << "failed window creation" << endl; return 0; };
+// takes the vertex and element information and compiles the shaders and window, returning the window, position, and boundary bindings
+shaderSetupStrc shaderSetup(float verts[], int vertsSize, GLuint elements[], int elementSize) {
+	// create struct object
+	shaderSetupStrc data;
 
 	//set escape key callback and current context
-	glfwSetKeyCallback(window, keyCallback);
-	glfwMakeContextCurrent(window);
+	//glfwMakeContextCurrent(&windowFunc);
 	glfwSwapInterval(0);
 	gladLoadGL();
 
-	boundaries = { float(resx / 40), boundaries[1], float(resy / 40) };
-
-	//init object and push to vector
-	PhysObj Sphere;
-	Sphere.writePos({ 0, 0, 0 });
-	Sphere.writeVel({ 5, 0, 25 });
-	Sphere.writer(1.5);
-
-	objects.insert(objects.begin(), Sphere);
-	float verts[20];
-	vector<float> vertsVec = objects[0].getVerts();
-	copy(vertsVec.begin(), vertsVec.end(), verts);
+	// init vertex array object, stores vertices
+	cout << endl;
 
 	//truthfully no clue how any of this works really
+	cout << endl;
+
+	//truthfully no clue how any of this works really
+	cout << endl;
+	// init vertex buffer object, stores information position
+	//truthfully no clue how any of this works really
+	cout << endl;
+
+	glBufferData(GL_ARRAY_BUFFER, vertsSize, verts, GL_DYNAMIC_DRAW);
 	GLuint vao;
-	glGenVertexArrays(1, &vao);
-	glBindVertexArray(vao);
+	// init element buffer object, stores the order to draw indices
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, elementSize, elements, GL_STATIC_DRAW);
 
-	cout << sizeof(verts) << endl;
+	// compile vertext and fragment shaders from above shader definitions
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elements), elements, GL_STATIC_DRAW);
 
-	GLuint vbo;
-	glGenBuffers(1, &vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_DYNAMIC_DRAW);
+	//int  success;
+	//char infoLog[512];
 
-	GLuint elements[] = { 
-		0, 1, 2, 2, 3, 0
-	};
+	// init element buffer object, stores the order to draw indices
 	GLuint ebo;
 	glGenBuffers(1, &ebo);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elements), elements, GL_STATIC_DRAW);
 
+	//int  success;
+	//char infoLog[512];
+	// compile shader program by attaching the vertex and fragment shaders, 
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertexShader, 1, &vertexSource, NULL);
 	glCompileShader(vertexShader);
+	glDeleteShader(vertexShader);
+	glDeleteShader(fragmentShader);
 
-	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
+	// binds the attribute "position" in the vertex shader to posAttrib to be used in defining the array
 	glCompileShader(fragmentShader);
 
-	GLuint shaderProgram = glCreateProgram();
-	glAttachShader(shaderProgram, vertexShader);
+	glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), 0);
+	glDeleteShader(fragmentShader);
+
 	glAttachShader(shaderProgram, fragmentShader);
 	glBindFragDataLocation(shaderProgram, 0, "colorOut");
-	glLinkProgram(shaderProgram);
+	glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+
 	glUseProgram(shaderProgram);
+
+	glDeleteShader(vertexShader);
+	glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (void*)(3*sizeof(float)));
 
 	GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
 	glEnableVertexAttribArray(posAttrib);
-	glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 5*sizeof(float), 0);
+	glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), 0);
 
+	// binds the attribute "colorVert" in the vertex shader to colAttrib to be used in defining the array
 	GLint colAttrib = glGetAttribLocation(shaderProgram, "colorVert");
 	glEnableVertexAttribArray(colAttrib);
-	glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 5*sizeof(float), (void*)(2*sizeof(float)));
+	glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (void*)(3*sizeof(float)));
 
-	//cout << glGetError() << endl;
+void renderThreadFunc(GLFWwindow* window) {
 
-	GLint uniPos = glGetUniformLocation(shaderProgram, "positionSphere");
-	GLint shaderBoundary = glGetUniformLocation(shaderProgram, "boundaries");
+	float verts[24];
+	vector<float> vertsVec = objects[0].getVerts();
+	copy(vertsVec.begin(), vertsVec.end(), verts);
 
-	array<float, 2> positionNew;
-	float time1 = 0, time2 = 0, deltaT = 0;
-	int i= 0;
-	int width, height;
+	// print out all vertex data for error checking
+	for (int l = 0; l < sizeof(verts) / sizeof(float); l++) {
+		cout << verts[l] << " ";
+	};
+	cout << endl;
+	cout << sizeof(verts) << endl;
 
-	//main loop, multithread physics and rendering later preferrably
+	// element list for vertex draw order
+	GLuint elements[] = {
+		0, 1, 2, 2, 3, 0
+	};
+
+	// declare GLFW variable and array sizes
+	int vertsSize = sizeof(verts);
+	int elementSize = sizeof(elements);
+	//GLFWwindow* window = &windowRef;
+	GLint uniPos, shaderBoundary;
+	glfwMakeContextCurrent(window);
+
+	// pass arrays and variables to shaderSetup, return struct to shaderFuncOutput and decompose
+	shaderSetupStrc shaderFuncOutput = shaderSetup(verts, vertsSize, elements, elementSize);
+	//window = shaderFuncOutput.windowStrc;
+	uniPos = shaderFuncOutput.posUniformStrc;
+	shaderBoundary = shaderFuncOutput.boundaryUniformStrc;
+
+	array<float, 3> positionNew;
+
+	// binds the inputs positionSphere and boundaries to temporary variable to be passed to main, they can be modified by the CPU to be sent to the shader
+	GLint uniPosFunc = glGetUniformLocation(shaderProgram, "positionSphere");
+	GLint shaderBoundaryFunc = glGetUniformLocation(shaderProgram, "boundaries");
+	//main loop, multithread physics and rendering later preferrably --- I am delusional
+	while (isRunning) {
+	//data.windowStrc = &windowFunc;
+	data.posUniformStrc = uniPosFunc;
+			time1 = float(glfwGetTime());;
+			i = 1;
+	//main loop, multithread physics and rendering later preferrably --- I am delusional
 	while (!glfwWindowShouldClose(window) && loopExit == 0) {
-		glTime = float(glfwGetTime());
+			time2 = float(glfwGetTime());;
+			i = 0;
+
+			time1 = float(glfwGetTime());;
+	float time1 = 0, time2 = 0, deltaT = 0;
+	int i = 0;
+			time2 = float(glfwGetTime());;
+
+	//main loop, multithread physics and rendering later preferrably --- I am delusional
+	while (!glfwWindowShouldClose(window) && loopExit == 0) {
 
 		if (i % 2 == 0) {
-			time1 = glTime;
+			time1 = float(glfwGetTime());;
 		}
 		else {
-			time2 = glTime;
+			time2 = float(glfwGetTime());;
 		};
 		deltaT = abs(time2 - time1);
-		i++;
-		//cout << deltaT << endl;
 
-		//draw call and frame size
-		glfwGetFramebufferSize(window, &width, &height);
-		glViewport(0, 0, width, height);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glDrawElements(GL_TRIANGLES, sizeof(elements) / sizeof(GLuint), GL_UNSIGNED_INT, 0);
+		// run physics calculations on each frame, no returns as values are changed within the physics objects through the objects vector
+		//vertsVec = objects[0].getVerts();
+		//copy(vertsVec.begin(), vertsVec.end(), verts);
+		//objects[0].writeVerts(vertsVec);
 
-		physicsSim(deltaT);
-		vertsVec = objects[0].getVerts();
-		copy(vertsVec.begin(), vertsVec.end(), verts);
-		objects[0].writeVerts(vertsVec);
+		//positionNew = { 0.0, 0.0, 0.0 };
+
+		//cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
+		//cout << positionNew[0] << " " << positionNew[1] << " " << positionNew[2] << " " << endl;
+		//objects[0].writeVerts(vertsVec);
+
+		boundaries = { float(width / 40), boundaries[1], float(height / 40) };
+		//cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
+		glUniform3f(uniPos, positionNew[0]/boundaries[0], positionNew[2] / boundaries[2], positionNew[1] / boundaries[1]);
+		glUniform3f(shaderBoundary, boundaries[0], boundaries[2], boundaries[1]);
+		//cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
+		//cout << positionNew[0] << " " << positionNew[1] << " " << positionNew[2] << " " << endl;
+		//copy(vertsVec.begin(), vertsVec.end(), verts);
+		positionNew = { objects[0].getPos()[0], objects[0].getPos()[1], objects[0].getPos()[2]};
+		boundaries = {float(width / 40), boundaries[1], float(height / 40)};
+		//cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
+		//cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
+		//cout << positionNew[0] << " " << positionNew[1] << " " << positionNew[2] << " " << endl;
 
 		positionNew = { objects[0].getPos()[0], objects[0].getPos()[2] };
 		glUniform2f(uniPos, positionNew[0]/boundaries[0], positionNew[1]/boundaries[2]);
 		glUniform2f(shaderBoundary, boundaries[0], boundaries[2]);
 
-		boundaries = {float(width / 40), boundaries[1], float(height / 40) };
+		boundaries = {float(width / 40), boundaries[1], float(height / 40)};
+		//cout << boundaries[0] << " " << boundaries[1] << " " << boundaries[2] << " " << endl;
 
-		glfwPollEvents();
 		glfwSwapBuffers(window);
 
 		//Sleep(0.1);
 		//cout << glGetError() << endl;
 	};
+}
 
-	glfwDestroyWindow(window);
+
+int main() {
+
+	//init object and push to vector
+	PhysObj Sphere;
+	Sphere.writePos({ 0, 0, 0 });
+	Sphere.writeVel({ 5, 0, 0 });
+	Sphere.writeRad(1.5);
+
+	// insert physics objects into objects vector, currently can only handle 1 object
+	objects.insert(objects.begin(), Sphere);
+
+	glfwSetErrorCallback(errorCallback);
+	if (!glfwInit()) return 0;
+
+	//init window object named windowFunc with title Sample
+	GLFWwindow* windowMain = glfwCreateWindow(resx, resz, "Sample", NULL, NULL);
+	if (!windowMain) { cout << "failed window creation" << endl; return 0; };
+
+	glfwSetKeyCallback(windowMain, keyCallback);
+	glfwMakeContextCurrent(NULL);
+
+	thread Render_Thread(renderThreadFunc, windowMain);
+	
+	while (!glfwWindowShouldClose(windowMain)) {
+		glfwPollEvents();
+	};
+	
+	isRunning = false;
+	if (Render_Thread.joinable()) {
+		Render_Thread.join();
+	};
+
+	glfwDestroyWindow(windowMain);
 	glfwTerminate();
 	return 0;
 };
